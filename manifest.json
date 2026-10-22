@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "dimdoremy.monitor-flash",
+  "name": "Monitor Flash",
+  "version": "1.0.0",
+  "author": "DimDoremy",
+  "license": "MIT",
+  "description": "Flashes the active display's number, name, and workspace whenever keyboard focus moves to another monitor.",
+  "kinds": ["overlay"],
+  "entryPoints": {
+    "overlay": "MonitorFlash.qml"
+  },
+  "keepLoaded": true
+}
