@@ -61,6 +61,17 @@ test("accepts the QML list Hyprland.monitors.values returns", () => {
   assert.equal(info.count, 2)
 })
 
+test("detects the pointer inside the card with a little tolerance", () => {
+  const rect = { x: 20, y: 900, width: 300, height: 100 }
+  assert.equal(Label.contains(rect, 100, 950, 0), true)
+  assert.equal(Label.contains(rect, 20, 900, 0), true)
+  assert.equal(Label.contains(rect, 320, 1000, 0), true)
+  assert.equal(Label.contains(rect, 100, 890, 0), false)
+  assert.equal(Label.contains(rect, 100, 890, 12), true)
+  assert.equal(Label.contains(rect, 19, 899, 2), true)
+  assert.equal(Label.contains(null, 1, 1, 0), false)
+})
+
 test("uses the last duplicate only by first match", () => {
   const duplicated = [{ name: "A", description: "first" }, { name: "A", description: "second" }]
   assert.equal(Label.info(duplicated, "A").number, 1)

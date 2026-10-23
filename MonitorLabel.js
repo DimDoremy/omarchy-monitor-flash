@@ -26,6 +26,13 @@ function info(monitors, name) {
   }
 }
 
+function contains(rect, x, y, pad) {
+  if (!rect) return false
+  var p = Number(pad) || 0
+  return x >= rect.x - p && x <= rect.x + rect.width + p
+    && y >= rect.y - p && y <= rect.y + rect.height + p
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { info: info }
+  module.exports = { info: info, contains: contains }
 }

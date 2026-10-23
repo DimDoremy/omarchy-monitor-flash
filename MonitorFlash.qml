@@ -18,12 +18,21 @@ import "MonitorLabel.js" as Label
 Item {
   id: root
 
+  // Injected by the shell's overlay loader. Used only to keep the card clear
+  // of a bar that shares the bottom or left edge.
+  property var shell: null
+
   // How long the card stays fully visible, then how long it fades out.
   property int holdDuration: 900
   readonly property int fadeDuration: 220
 
   property bool opened: false
   property var targetScreen: null
+
+  // The card starts in the bottom-left corner. If the pointer is already
+  // inside that corner while the card is still up, it slides to the
+  // bottom-right instead of sitting under the cursor.
+  property bool avoidCursor: false
 
   property string monitorName: ""
   property string monitorDescription: ""
@@ -37,6 +46,14 @@ Item {
   property string pendingName: ""
 
   readonly property var monitors: Hyprland.monitors ? Hyprland.monitors.values : []
+
+  readonly property string barPosition: shell && shell.barConfig ? String(shell.barConfig.position || "top") : "top"
+  readonly property bool barVisible: shell && shell.bar ? shell.bar.barHidden !== true : false
+  readonly property int barSize: barVisible ? Math.max(0, Number(shell.bar.barSize || 0)) : 0
+  readonly property int edgeGap: Math.round(Commons.Style.space(20))
+  readonly property int leftInset: edgeGap + (barPosition === "left" && barVisible ? barSize : 0)
+  readonly property int rightInset: edgeGap + (barPosition === "right" && barVisible ? barSize : 0)
+  readonly property int bottomInset: edgeGap + (barPosition === "bottom" && barVisible ? barSize : 0)
 
   Commons.Translations {
     id: strings
@@ -69,6 +86,40 @@ Item {
     return value > 0 ? Commons.I18n.formatNumber(value) : ""
   }
 
+  // Hyprland reports the pointer in layout coordinates. The card lives in
+  // this monitor's local space, so subtract the monitor origin before testing
+  // whether the pointer is over the card.
+  function monitorOrigin() {
+    var list = root.monitors
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].name || "") !== root.monitorName) continue
+      return { x: Number(list[i].x) || 0, y: Number(list[i].y) || 0 }
+    }
+    return {
+      x: root.targetScreen ? Number(root.targetScreen.x) || 0 : 0,
+      y: root.targetScreen ? Number(root.targetScreen.y) || 0 : 0
+    }
+  }
+
+  function noteCursor(raw) {
+    if (!root.opened || root.avoidCursor) return
+    var parts = String(raw || "").split(",")
+    var globalX = Number(parts[0])
+    var globalY = Number(parts[1])
+    if (!Number.isFinite(globalX) || !Number.isFinite(globalY)) return
+
+    var origin = root.monitorOrigin()
+    var x = globalX - origin.x
+    var y = globalY - origin.y
+    var rect = { x: card.x, y: card.y, width: card.width, height: card.height }
+    if (Label.contains(rect, x, y, 2)) root.avoidCursor = true
+  }
+
+  function pollCursor() {
+    if (!root.opened || root.avoidCursor || cursorProcess.running) return
+    cursorProcess.running = true
+  }
+
   // ----------------------------------------------------------------- flash
 
   // A monitor that is not in the cache yet (hotplug, very first event) gets one
@@ -92,8 +143,12 @@ Item {
     root.monitorCount = info.count
     root.workspaceName = root.workspaceFor(info.name)
     root.targetScreen = screen
+    root.avoidCursor = false
     root.opened = true
     hideTimer.restart()
+    // A pointer already resting in the bottom-left corner should move the card
+    // on the first frame instead of waiting for the first poll.
+    Qt.callLater(root.pollCursor)
   }
 
   function flash() {
@@ -179,6 +234,26 @@ Item {
     }
   }
 
+  // The card is a visual-only surface with an empty input mask, so it cannot
+  // see pointer enter events itself. While it is up, ask the compositor where
+  // the pointer is; this stops as soon as the card moves or closes.
+  Process {
+    id: cursorProcess
+    command: ["hyprctl", "cursorpos"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.noteCursor(text)
+    }
+  }
+
+  Timer {
+    id: cursorTimer
+    interval: 100
+    repeat: true
+    running: root.opened && !root.avoidCursor
+    onTriggered: root.pollCursor()
+  }
+
   // ---------------------------------------------------------------- surface
 
   PanelWindow {
@@ -197,7 +272,9 @@ Item {
 
     MonitorCard {
       id: card
-      anchors.centerIn: parent
+      // Bottom-left by default; bottom-right once the pointer is over it.
+      x: root.avoidCursor ? panel.width - card.width - root.rightInset : root.leftInset
+      y: panel.height - card.height - root.bottomInset + (root.opened ? 0 : Math.round(Commons.Style.space(8)))
       LayoutMirroring.enabled: Commons.I18n.rightToLeft
       LayoutMirroring.childrenInherit: true
       numberText: root.displayNumber(root.monitorNumber) || "?"
@@ -216,10 +293,10 @@ Item {
 
       opacity: root.opened ? 1 : 0
       scale: root.opened ? 1 : 0.96
-      y: root.opened ? 0 : Math.round(Commons.Style.space(8))
 
       Behavior on opacity { NumberAnimation { duration: root.opened ? 140 : root.fadeDuration; easing.type: Easing.OutCubic } }
       Behavior on scale { NumberAnimation { duration: root.opened ? 160 : root.fadeDuration; easing.type: Easing.OutCubic } }
+      Behavior on x { enabled: root.opened; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
       Behavior on y { NumberAnimation { duration: root.opened ? 160 : root.fadeDuration; easing.type: Easing.OutCubic } }
     }
   }
@@ -248,7 +325,8 @@ Item {
         monitor: root.monitorName,
         number: root.monitorNumber,
         count: root.monitorCount,
-        workspace: root.workspaceName
+        workspace: root.workspaceName,
+        avoided: root.avoidCursor
       })
     }
   }

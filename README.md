@@ -42,8 +42,10 @@ needed.
 
 ## Use
 
-Switch monitors. The card appears on the newly focused display for about a
-second, then fades out.
+Switch monitors. The card appears in the bottom-left corner of the newly
+focused display for about a second, then fades out. If the pointer is resting
+in that corner while the card is still visible, the card slides to the
+bottom-right so it never sits under the cursor.
 
 Show it on demand:
 
@@ -64,8 +66,10 @@ when the shell starts.
 
 The plugin is a keep-loaded `overlay` that watches Hyprland's
 `focusedMonitor`. On a real change it maps a transparent, input-transparent
-layer surface on the new output, draws one card, and hides again. Nothing is
-written to disk and the compositor configuration is never modified.
+layer surface on the new output, draws one card in the bottom-left corner, and
+hides again. While the card is up, a 100 ms `hyprctl cursorpos` check moves it
+to the bottom-right if the pointer is over it, then stops. Nothing is written
+to disk and the compositor configuration is never modified.
 
 The card uses the shell's theme tokens (surface color, border, corner radius,
 fonts, accent) and Omarchy's language setting. English, Simplified Chinese, and
